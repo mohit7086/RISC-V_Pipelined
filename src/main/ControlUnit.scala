@@ -1,25 +1,86 @@
-mport chisel3._
+import chisel3._
 import chisel3.util._
 
-class MuxCase_Example extends Module {
-  // Define the IO interface for the module
+class CU extends Module {
   val io = IO(new Bundle {
-    val in0 = Input(Bool())    // First input signal
-    val in1 = Input(Bool())    // Second input signal
-    val in2 = Input(Bool())    // Third input signal
-    val in3 = Input(Bool())    // Fourth input signal
-    val sel = Input(UInt(2.W)) // 2-bit wide select signal
-    val out = Output(Bool())   // Output signal
+    val opcode = Input(UInt(7.W))
+    val stall = Input(Bool())
+    
+    val branch = Output(Bool())
+    val memread = Output(Bool())
+    val memtoreg = Output(Bool())
+    val memwrite = Output(Bool())
+    val aluSrc = Output(Bool())
+    val regwrite = Output(Bool())
+    val Aluop = Output(UInt(2.W))
   })
 
-  // Use MuxCase to select one of the input signals based on the sel signal
-  io.out := MuxCase(false.B, Array(
-    (io.sel === 0.U) -> io.in0,  // If sel is 0, select in0
-    (io.sel === 1.U) -> io.in1,  // If sel is 1, select in1
-    (io.sel === 2.U) -> io.in2,  // If sel is 2, select in2
-    (io.sel === 3.U) -> io.in3   // If sel is 3, select in3
-  ))
-}
+  // Default values
+  io.branch := false.B
+  io.memread := false.B
+  io.memtoreg := false.B
+  io.memwrite := false.B
+  io.aluSrc := false.B
+  io.regwrite := false.B
+  io.Aluop := "b00".U
 
-// Generate the Verilog code for the MuxCase_Example module
-println((new chisel3.stage.ChiselStage).emitVerilog(new MuxCase_Example()))
+  when(io.stall) {
+    // If stall is active, set all control signals to 0
+    io.branch := false.B
+    io.memread := false.B
+    io.memtoreg := false.B
+    io.memwrite := false.B
+    io.aluSrc := false.B
+    io.regwrite := false.B
+    io.Aluop := "b00".U
+  } .otherwise {
+    // Control signals based on opcode
+    switch(io.opcode) {
+      is("b0000011".U) { // Load instruction
+        io.aluSrc := true.B
+        io.memtoreg := true.B
+        io.regwrite := true.B
+        io.memread := true.B
+        io.memwrite := false.B
+        io.branch := false.B
+        io.Aluop := "b00".U
+      }
+      is("b0100011".U) { // Store instruction
+        io.aluSrc := true.B
+        io.memtoreg := false.B
+        io.regwrite := false.B
+        io.memread := false.B
+        io.memwrite := true.B
+        io.branch := false.B
+        io.Aluop := "b00".U
+      }
+      is("b0110011".U) { // R-type instruction
+        io.aluSrc := false.B
+        io.memtoreg := false.B
+        io.regwrite := true.B
+        io.memread := false.B
+        io.memwrite := false.B
+        io.branch := false.B
+        io.Aluop := "b10".U
+      }
+      is("b1100011".U) { // Branch instruction
+        io.aluSrc := false.B
+        io.memtoreg := false.B
+        io.regwrite := false.B
+        io.memread := false.B
+        io.memwrite := false.B
+        io.branch := true.B
+        io.Aluop := "b01".U
+      }
+      is("b0010011".U) { // I-type instruction
+        io.aluSrc := true.B
+        io.memtoreg := false.B
+        io.regwrite := true.B
+        io.memread := false.B
+        io.memwrite := false.B
+        io.branch := false.B
+        io.Aluop := "b00".U
+      }
+    }
+  }
+}
